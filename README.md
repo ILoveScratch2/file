@@ -1,2 +1,3 @@
-# file
-GitHub Pages external files
+# File
+
+The repository to save GitHub Pages' external files.
