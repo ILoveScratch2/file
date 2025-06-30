@@ -277,7 +277,6 @@ docker_install() {
         # 获取密码
         echo -e "${GREEN_COLOR}获取初始密码...${RES}"
         ADMIN_PASS=$(docker exec ${DOCKER_CONTAINER_NAME} ./alist admin random 2>/dev/null | grep "password:" | sed 's/.*password://' | tr -d ' ')
-s
         if [ -n "$ADMIN_PASS" ]; then
             ADMIN_USER="admin"
         fi
@@ -538,8 +537,8 @@ INSTALL() {
     cd "$CURRENT_DIR"
   else
     echo -e "${RED_COLOR}安装失败！${RES}"
-    rm -rf $INSTALL_PATH
-    mkdir -p $INSTALL_PATH
+    rm -rf "$INSTALL_PATH"
+    mkdir -p "$INSTALL_PATH"
     exit 1
   fi
 
@@ -651,14 +650,14 @@ UPDATE() {
     systemctl stop openlist
 
     # 备份二件
-    cp $INSTALL_PATH/openlist /tmp/openlist.bak
+    cp "$INSTALL_PATH/openlist" /tmp/openlist.bak
 
     # 下载新版本
     echo -e "${GREEN_COLOR}下载 OpenList ...${RES}"
     if ! download_file "${GH_DOWNLOAD_URL}/openlist-linux-musl-$ARCH.tar.gz" "/tmp/openlist.tar.gz"; then
         echo -e "${RED_COLOR}下载失败，更新终止${RES}"
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
-        mv /tmp/openlist.bak $INSTALL_PATH/openlist
+        mv /tmp/openlist.bak "$INSTALL_PATH/openlist"
         systemctl start openlist
         exit 1
     fi
@@ -667,19 +666,19 @@ UPDATE() {
     if ! tar zxf /tmp/openlist.tar.gz -C $INSTALL_PATH/; then
         echo -e "${RED_COLOR}解压失败，更新终止${RES}"
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
-        mv /tmp/openlist.bak $INSTALL_PATH/openlist
+        mv /tmp/openlist.bak "$INSTALL_PATH/openlist"
         systemctl start openlist
         rm -f /tmp/openlist.tar.gz
         exit 1
     fi
 
     # 验证更新是否成功
-    if [ -f $INSTALL_PATH/openlist ]; then
+    if [ -f "$INSTALL_PATH/openlist" ]; then
         echo -e "${GREEN_COLOR}下载成功，正在更新${RES}"
     else
         echo -e "${RED_COLOR}更新失败！${RES}"
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
-        mv /tmp/openlist.bak $INSTALL_PATH/openlist
+        mv /tmp/openlist.bak "$INSTALL_PATH/openlist"
         systemctl start openlist
         rm -f /tmp/openlist.tar.gz
         exit 1
@@ -706,10 +705,10 @@ UNINSTALL() {
     fi
     
     echo -e "${RED_COLOR}警告：卸载后将删除本地 OpenList 目录、数据库文件及命令行工具！${RES}"
-    read -p "是否确认卸载？[Y/n]: " choice
-    
-    case "${choice:-y}" in
-        [yY]|"")
+    read -p "是否确认卸载？[y/N]: " choice
+
+    case "$choice" in
+        [yY])
             echo -e "${GREEN_COLOR}开始卸载...${RES}"
             
             echo -e "${GREEN_COLOR}停止 OpenList 进程${RES}"
@@ -717,7 +716,7 @@ UNINSTALL() {
             systemctl disable openlist
             
             echo -e "${GREEN_COLOR}删除 OpenList 文件${RES}"
-            rm -rf $INSTALL_PATH
+            rm -rf "$INSTALL_PATH"
             rm -f /etc/systemd/system/openlist.service
             systemctl daemon-reload
             
@@ -735,6 +734,7 @@ UNINSTALL() {
             ;;
         *)
             echo -e "${GREEN_COLOR}已取消卸载${RES}"
+            return 0
             ;;
     esac
 }
@@ -756,7 +756,7 @@ RESET_PASSWORD() {
     read -p "请输入选项 [0-4]: " choice
 
     # 切换到 OpenList 目录
-    cd $INSTALL_PATH
+    cd "$INSTALL_PATH"
 
     case "$choice" in
         1)
