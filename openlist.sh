@@ -257,7 +257,7 @@ docker_install() {
 
     echo -e "${GREEN_COLOR}正在拉取镜像并创建Container...${RES}"
 
-    # 运行 Docker 容器
+    # 运行 Docker 
     if docker run -d \
         --name ${DOCKER_CONTAINER_NAME} \
         --restart=unless-stopped \
@@ -863,6 +863,41 @@ MANAGER_PATH="/usr/local/sbin/openlist-manager"  # 管理脚本存放路径
 COMMAND_LINK="/usr/local/bin/openlist"          # 命令软链接路径
 
 
+# ===================== 关于信息 =====================
+SHOW_ABOUT() {
+    clear
+    echo -e "${GREEN_COLOR}┌────────────────────────────────────────────────────┐${RES}"
+    echo -e "${GREEN_COLOR}│               OpenList Manage Script               │${RES}"
+    echo -e "${GREEN_COLOR}├────────────────────────────────────────────────────┤${RES}"
+    echo -e "${GREEN_COLOR}│                                                    │${RES}"
+    echo -e "${GREEN_COLOR}│  ${CYAN_COLOR}版本信息：${RES}                                       │"
+    echo -e "${GREEN_COLOR}│    脚本版本: 1.0.1                                 │${RES}"
+    echo -e "${GREEN_COLOR}│    更新日期: 2025-6-30                             │${RES}"
+    echo -e "${GREEN_COLOR}│                                                    │${RES}"
+    echo -e "${GREEN_COLOR}│                                                    │${RES}"
+    echo -e "${GREEN_COLOR}│  ${CYAN_COLOR}OpenList：${RES}                                      │"
+    echo -e "${GREEN_COLOR}│    主项目: https://github.com/OpenListTeam/OpenList│${RES}"
+    echo -e "${GREEN_COLOR}│    文档库: https://github.com/OpenListTeam/docs    │${RES}"
+    echo -e "${GREEN_COLOR}│                                                    │${RES}"
+    echo -e "${GREEN_COLOR}│  ${CYAN_COLOR}作者信息：${RES}                                      │"
+    echo -e "${GREEN_COLOR}│    开发: OpenList Dev Team                         │${RES}"
+    echo -e "${GREEN_COLOR}│                                                    │${RES}"
+    echo -e "${GREEN_COLOR}│  ${CYAN_COLOR}许可证：${RES}                                        │"
+    echo -e "${GREEN_COLOR}│    许可证: MIT License                             │${RES}"
+    echo -e "${GREEN_COLOR}│                                                    │${RES}"
+    echo -e "${GREEN_COLOR}│  ${CYAN_COLOR}支持平台：${RES}                                      │"
+    echo -e "${GREEN_COLOR}│    架构: x86_64, arm64                             │${RES}"
+    echo -e "${GREEN_COLOR}│    系统: Linux with systemd                        │${RES}"
+    echo -e "${GREEN_COLOR}│                                                    │${RES}"
+    echo -e "${GREEN_COLOR}│                                                    │${RES}"
+    echo -e "${GREEN_COLOR}└────────────────────────────────────────────────────┘${RES}"
+    echo
+    echo -e "${YELLOW_COLOR}感谢使用 OpenList 管理脚本！${RES}"
+    echo
+    read -p "PAUSED" -n 1
+    echo
+}
+
 INSTALL_CLI() {
     # 检查是否有 root 权限
     if [ "$(id -u)" != "0" ]; then
@@ -950,10 +985,11 @@ SHOW_MENU() {
   echo -e "${GREEN_COLOR}9、Docker 管理${RES}"
   echo -e "${GREEN_COLOR}10、定时更新${RES}"
   echo -e "${GREEN_COLOR}11、系统状态${RES}"
+  echo -e "${GREEN_COLOR}12、关于${RES}"
   echo -e "${GREEN_COLOR}-------------------${RES}"
   echo -e "${GREEN_COLOR}0、退出脚本${RES}"
   echo
-  read -p "请输入选项 [0-11]: " choice
+  read -p "请输入选项 [0-12]: " choice
   
   case "$choice" in
     1)
@@ -1021,13 +1057,13 @@ SHOW_MENU() {
       # Docker 管理菜单
       echo -e "\n${GREEN_COLOR}Docker 管理${RES}"
       echo -e "${GREEN_COLOR}1、Docker 安装 OpenList${RES}"
-      echo -e "${GREEN_COLOR}2、进入 Docker 容器${RES}"
-      echo -e "${GREEN_COLOR}3、Docker 容器密码管理${RES}"
-      echo -e "${GREEN_COLOR}4、查看 Docker 容器状态${RES}"
-      echo -e "${GREEN_COLOR}5、停止 Docker 容器${RES}"
-      echo -e "${GREEN_COLOR}6、启动 Docker 容器${RES}"
-      echo -e "${GREEN_COLOR}7、重启 Docker 容器${RES}"
-      echo -e "${GREEN_COLOR}8、删除 Docker 容器${RES}"
+      echo -e "${GREEN_COLOR}2、进入 Docker Container${RES}"
+      echo -e "${GREEN_COLOR}3、Docker Container密码管理${RES}"
+      echo -e "${GREEN_COLOR}4、查看 Docker Container状态${RES}"
+      echo -e "${GREEN_COLOR}5、停止 Docker Container${RES}"
+      echo -e "${GREEN_COLOR}6、启动 Docker Container${RES}"
+      echo -e "${GREEN_COLOR}7、重启 Docker Container${RES}"
+      echo -e "${GREEN_COLOR}8、删除 Docker Container${RES}"
       echo -e "${GREEN_COLOR}0、返回主菜单${RES}"
       echo
       read -p "请输入选项 [0-8]: " docker_choice
@@ -1050,36 +1086,36 @@ SHOW_MENU() {
           ;;
         4)
           if check_docker; then
-            echo -e "${GREEN_COLOR}Docker 容器状态：${RES}"
+            echo -e "${GREEN_COLOR}Docker Container状态：${RES}"
             docker ps -a --filter "name=${DOCKER_CONTAINER_NAME}" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
           fi
           ;;
         5)
           if check_docker; then
             docker stop ${DOCKER_CONTAINER_NAME}
-            echo -e "${GREEN_COLOR}容器已停止${RES}"
+            echo -e "${GREEN_COLOR}Container已停止${RES}"
           fi
           ;;
         6)
           if check_docker; then
             docker start ${DOCKER_CONTAINER_NAME}
-            echo -e "${GREEN_COLOR}容器已启动${RES}"
+            echo -e "${GREEN_COLOR}Container已启动${RES}"
           fi
           ;;
         7)
           if check_docker; then
             docker restart ${DOCKER_CONTAINER_NAME}
-            echo -e "${GREEN_COLOR}容器已重启${RES}"
+            echo -e "${GREEN_COLOR}Container已重启${RES}"
           fi
           ;;
         8)
           if check_docker; then
-            read -p "确认删除容器？[y/N]: " confirm
+            read -p "确认删除Container？[y/N]: " confirm
             case "${confirm:-n}" in
               [yY])
                 docker stop ${DOCKER_CONTAINER_NAME} 2>/dev/null
                 docker rm ${DOCKER_CONTAINER_NAME}
-                echo -e "${GREEN_COLOR}容器已删除${RES}"
+                echo -e "${GREEN_COLOR}Container 已删除${RES}"
                 ;;
               *)
                 echo -e "${YELLOW_COLOR}已取消删除${RES}"
@@ -1103,6 +1139,10 @@ SHOW_MENU() {
       check_system_status
       return 0
       ;;
+    12)
+      SHOW_ABOUT
+      return 0
+      ;;
     0)
       exit 0
       ;;
@@ -1113,12 +1153,11 @@ SHOW_MENU() {
   esac
 }
 
-# 修改主程序逻辑
+
 if [ $# -eq 0 ]; then
   while true; do
     SHOW_MENU
     echo
-    # 等待一会儿让用户看到执行结果
     if [ $? -eq 0 ]; then
       sleep 3  # 成功
     else
