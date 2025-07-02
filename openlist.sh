@@ -1,14 +1,15 @@
 #!/bin/bash
 ###############################################################################
 #
-# OpenList Manager Script
+# OpenList Manage Script
 #
-# Version: 1.0.1
-# Last Updated: 2025-6-30
+# Version: 1.1.1
+# Last Updated: 2025-07-02
 #
-# Description: 
+# Description:
 #   A management script for OpenList (https://github.com/OpenListTeam/OpenList)
 #   Provides installation, update, uninstallation and management functions
+#   Enhanced with disk space checking, config backup/restore, password management
 #
 # Requirements:
 #   - Linux with systemd
@@ -16,8 +17,8 @@
 #   - curl, tar
 #   - x86_64 or arm64 architecture
 #
-# Author: Troray and OpenList Dev Team
-# Repository: https://github.com/OpenListTeam/docs
+# Author: ILoveScratch and OpenList Dev Team
+#
 # License: MIT
 #
 ###############################################################################
@@ -30,10 +31,64 @@ handle_error() {
     exit ${exit_code}
 }
 
+
+
+# 检测操作系统类型
+detect_os() {
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux
+        OS_TYPE="linux"
+        OS_NAME="linux"
+    else
+        # 不支持的系统
+        OS_TYPE="unknown"
+        OS_NAME="unknown"
+    fi
+}
+
+# 获取安装路径
+get_install_path() {
+    echo "/opt/openlist"
+}
+
+# 检查磁盘空间
+check_disk_space() {
+    echo -e "${BLUE_COLOR}检查系统空间...${RES}"
+
+    # 检查 /tmp 目录空间
+    local tmp_space=$(df -h /tmp 2>/dev/null | awk 'NR==2 {print $4}' || echo "unknown")
+    local tmp_space_mb=$(df /tmp 2>/dev/null | awk 'NR==2 {print $4}' || echo "0")
+
+    # 检查当前目录空间
+    local current_space=$(df -h . 2>/dev/null | awk 'NR==2 {print $4}' || echo "unknown")
+    local current_space_mb=$(df . 2>/dev/null | awk 'NR==2 {print $4}' || echo "0")
+
+    if [ "$tmp_space_mb" != "0" ] && [ "$current_space_mb" != "0" ]; then
+        if [ $tmp_space_mb -lt 102400 ] || [ $current_space_mb -lt 102400 ]; then
+            echo -e "${RED_COLOR}警告：系统空间不足${RES}"
+            echo -e "临时目录可用空间: $tmp_space"
+            echo -e "当前目录可用空间: $current_space"
+            echo -e "${YELLOW_COLOR}建议清理系统空间后再继续${RES}"
+            read -p "是否继续？[y/N]: " continue_choice
+            case "$continue_choice" in
+                [yY])
+                    return 0
+                    ;;
+                *)
+                    exit 1
+                    ;;
+            esac
+        fi
+    fi
+}
+
 # 在关键操作处使用错误处理
 if ! command -v curl >/dev/null 2>&1; then
     handle_error 1 "未找到 curl 命令，请先安装"
 fi
+
+# 初始化系统检测
+detect_os
 
 # 配置部分
 #######################
@@ -78,13 +133,13 @@ GET_INSTALLED_PATH() {
 
 # 设置安装路径
 if [ ! -n "$2" ]; then
-    INSTALL_PATH='/opt/openlist'
+    INSTALL_PATH=$(get_install_path)
 else
     INSTALL_PATH=${2%/}
     if ! [[ $INSTALL_PATH == */openlist ]]; then
         INSTALL_PATH="$INSTALL_PATH/openlist"
     fi
-    
+
     # 创建父目录
     parent_dir=$(dirname "$INSTALL_PATH")
     if [ ! -d "$parent_dir" ]; then
@@ -93,7 +148,7 @@ else
             exit 1
         }
     fi
-    
+
     # 在创建目录后再检查权限
     if ! [ -w "$parent_dir" ]; then
         echo -e "${RED_COLOR}错误：目录 $parent_dir 没有写入权限${RES}"
@@ -133,8 +188,11 @@ if [ "$(id -u)" != "0" ]; then
 elif [ "$ARCH" == "UNKNOWN" ]; then
   echo -e "\r\n${RED_COLOR}出错了${RES}，一键安装目前仅支持 x86_64 和 arm64 平台。\r\n"
   exit 1
-elif ! command -v systemctl >/dev/null 2>&1; then
+elif [ "$OS_TYPE" = "linux" ] && ! command -v systemctl >/dev/null 2>&1; then
   echo -e "\r\n${RED_COLOR}出错了${RES}，无法确定你当前的 Linux 发行版。\r\n建议手动安装。\r\n"
+  exit 1
+elif [ "$OS_TYPE" != "linux" ]; then
+  echo -e "\r\n${RED_COLOR}出错了${RES}，此脚本仅支持 Linux 系统。\r\n"
   exit 1
 fi
 
@@ -171,7 +229,73 @@ CHECK() {
 ADMIN_USER=""
 ADMIN_PASS=""
 
-# ===================== Docker 镜像标签选择 =====================
+
+
+# 备份配置
+backup_config() {
+    echo -e "${CYAN_COLOR}配置备份${RES}"
+
+    if [ ! -d "$INSTALL_PATH/data" ]; then
+        echo -e "${RED_COLOR}错误：未找到配置目录${RES}"
+        read -p "按回车键继续..."
+        return 1
+    fi
+
+    local backup_dir="./openlist_backup_$(date +%Y%m%d_%H%M%S)"
+    mkdir -p "$backup_dir"
+
+    echo -e "${BLUE_COLOR}备份配置到：$backup_dir${RES}"
+
+    if cp -r "$INSTALL_PATH/data" "$backup_dir/"; then
+        echo -e "${GREEN_COLOR}备份成功${RES}"
+        echo -e "备份位置: $backup_dir/data"
+    else
+        echo -e "${RED_COLOR}备份失败${RES}"
+        return 1
+    fi
+
+    read -p "按回车键继续..."
+    return 0
+}
+
+# 恢复配置
+restore_config() {
+    echo -e "${CYAN_COLOR}配置恢复${RES}"
+
+    read -p "请输入备份目录路径: " backup_path
+
+    if [ ! -d "$backup_path/data" ]; then
+        echo -e "${RED_COLOR}错误：备份目录不存在${RES}"
+        read -p "按回车键继续..."
+        return 1
+    fi
+
+    echo -e "${YELLOW_COLOR}警告：此操作将覆盖当前配置${RES}"
+    read -p "确认恢复？[y/N]: " confirm
+
+    case "$confirm" in
+        [yY])
+            # 停止服务
+            systemctl stop openlist 2>/dev/null
+
+            if cp -r "$backup_path/data" "$INSTALL_PATH/"; then
+                echo -e "${GREEN_COLOR}恢复成功${RES}"
+
+                # 启动服务
+                systemctl start openlist
+            else
+                echo -e "${RED_COLOR}恢复失败${RES}"
+            fi
+            ;;
+        *)
+            echo -e "${YELLOW_COLOR}已取消恢复${RES}"
+            ;;
+    esac
+
+    read -p "按回车键继续..."
+}
+
+
 select_docker_image_tag() {
     echo -e "${BLUE_COLOR}请选择要使用的 OpenList Docker 镜像标签：${RES}"
     echo -e "${GREEN_COLOR}1${RES} - beta-ffmpeg"
@@ -257,16 +381,16 @@ docker_install() {
 
     echo -e "${GREEN_COLOR}正在拉取镜像并创建Container...${RES}"
 
-    # 运行 Docker 
+    # 运行 Docker
     if docker run -d \
         --name ${DOCKER_CONTAINER_NAME} \
         --restart=unless-stopped \
         -p ${DOCKER_PORT}:5244 \
-        -v /opt/openlist/data:/opt/alist/data \
+        -v /opt/openlist/data:/opt/openlist/data \
         -e PUID=0 \
         -e PGID=0 \
         -e UMASK=022 \
-        xhofe/alist:${DOCKER_IMAGE_TAG}; then
+        openlistteam/openlist:${DOCKER_IMAGE_TAG}; then
 
         echo -e "${GREEN_COLOR}Docker Container创建成功！${RES}"
 
@@ -276,7 +400,7 @@ docker_install() {
 
         # 获取密码
         echo -e "${GREEN_COLOR}获取初始密码...${RES}"
-        ADMIN_PASS=$(docker exec ${DOCKER_CONTAINER_NAME} ./alist admin random 2>/dev/null | grep "password:" | sed 's/.*password://' | tr -d ' ')
+        ADMIN_PASS=$(docker exec ${DOCKER_CONTAINER_NAME} ./openlist admin random 2>/dev/null | grep "password:" | sed 's/.*password://' | tr -d ' ')
         if [ -n "$ADMIN_PASS" ]; then
             ADMIN_USER="admin"
         fi
@@ -327,7 +451,7 @@ docker_password() {
     case "$choice" in
         1)
             echo -e "${GREEN_COLOR}正在生成随机密码...${RES}"
-            docker exec ${DOCKER_CONTAINER_NAME} ./alist admin random
+            docker exec ${DOCKER_CONTAINER_NAME} ./openlist admin random
             ;;
         2)
             read -p "请输入新密码: " new_password
@@ -336,7 +460,7 @@ docker_password() {
                 return 1
             fi
             echo -e "${GREEN_COLOR}正在设置新密码...${RES}"
-            docker exec ${DOCKER_CONTAINER_NAME} ./alist admin set "$new_password"
+            docker exec ${DOCKER_CONTAINER_NAME} ./openlist admin set "$new_password"
             ;;
         0)
             return 0
@@ -527,12 +651,14 @@ INSTALL() {
 
   if [ -f $INSTALL_PATH/openlist ]; then
     echo -e "${GREEN_COLOR}下载成功，正在安装...${RES}"
-    
+
+    chmod +x $INSTALL_PATH/openlist
+
     # 获取初始账号密码（临时切换目录）
     cd $INSTALL_PATH
     ACCOUNT_INFO=$($INSTALL_PATH/openlist admin random 2>&1)
-    ADMIN_USER=$(echo "$ACCOUNT_INFO" | grep "username:" | sed 's/.*username://')
-    ADMIN_PASS=$(echo "$ACCOUNT_INFO" | grep "password:" | sed 's/.*password://')
+    ADMIN_USER=$(echo "$ACCOUNT_INFO" | grep "username:" | sed 's/.*username://' | tr -d ' ')
+    ADMIN_PASS=$(echo "$ACCOUNT_INFO" | grep "password:" | sed 's/.*password://' | tr -d ' ')
     # 切回原目录
     cd "$CURRENT_DIR"
   else
@@ -587,10 +713,11 @@ SUCCESS() {
   }
 
   # 获取本地 IP
-  LOCAL_IP=$(ip addr show | grep -w inet | grep -v "127.0.0.1" | awk '{print $2}' | cut -d/ -f1 | head -n1)
-  # 获取公网 IP
-  PUBLIC_IP=$(curl -s4 ip.sb || curl -s4 ifconfig.me || echo "获取失败")
-  
+  LOCAL_IP=$(ip addr show 2>/dev/null | grep -w inet | grep -v "127.0.0.1" | awk '{print $2}' | cut -d/ -f1 | head -n1)
+
+
+  PUBLIC_IP=$(curl -s4 --connect-timeout 5 ip.sb 2>/dev/null || curl -s4 --connect-timeout 5 ifconfig.me 2>/dev/null)
+
   echo -e "┌────────────────────────────────────────────────────┐"
   print_line "OpenList 安装成功！"
   print_line ""
@@ -649,7 +776,7 @@ UPDATE() {
     echo -e "${GREEN_COLOR}停止 OpenList 进程${RES}\r\n"
     systemctl stop openlist
 
-    # 备份二件
+    # 备份二进制文件
     cp "$INSTALL_PATH/openlist" /tmp/openlist.bak
 
     # 下载新版本
@@ -659,6 +786,11 @@ UPDATE() {
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
         mv /tmp/openlist.bak "$INSTALL_PATH/openlist"
         systemctl start openlist
+        if systemctl is-active openlist >/dev/null 2>&1; then
+            echo -e "${GREEN_COLOR}服务恢复成功${RES}"
+        else
+            echo -e "${RED_COLOR}服务恢复失败${RES}"
+        fi
         exit 1
     fi
 
@@ -668,6 +800,11 @@ UPDATE() {
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
         mv /tmp/openlist.bak "$INSTALL_PATH/openlist"
         systemctl start openlist
+        if systemctl is-active openlist >/dev/null 2>&1; then
+            echo -e "${GREEN_COLOR}服务恢复成功${RES}"
+        else
+            echo -e "${RED_COLOR}服务恢复失败${RES}"
+        fi
         rm -f /tmp/openlist.tar.gz
         exit 1
     fi
@@ -675,11 +812,18 @@ UPDATE() {
     # 验证更新是否成功
     if [ -f "$INSTALL_PATH/openlist" ]; then
         echo -e "${GREEN_COLOR}下载成功，正在更新${RES}"
+        # 确保新文件有可执行权限
+        chmod +x "$INSTALL_PATH/openlist"
     else
         echo -e "${RED_COLOR}更新失败！${RES}"
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
         mv /tmp/openlist.bak "$INSTALL_PATH/openlist"
         systemctl start openlist
+        if systemctl is-active openlist >/dev/null 2>&1; then
+            echo -e "${GREEN_COLOR}服务恢复成功${RES}"
+        else
+            echo -e "${RED_COLOR}服务恢复失败${RES}"
+        fi
         rm -f /tmp/openlist.tar.gz
         exit 1
     fi
@@ -710,13 +854,14 @@ UNINSTALL() {
     case "$choice" in
         [yY])
             echo -e "${GREEN_COLOR}开始卸载...${RES}"
-            
+
             echo -e "${GREEN_COLOR}停止 OpenList 进程${RES}"
             systemctl stop openlist
             systemctl disable openlist
-            
+
             echo -e "${GREEN_COLOR}删除 OpenList 文件${RES}"
             rm -rf "$INSTALL_PATH"
+
             rm -f /etc/systemd/system/openlist.service
             systemctl daemon-reload
             
@@ -739,7 +884,63 @@ UNINSTALL() {
     esac
 }
 
-# ===================== 增强的密码管理功能 =====================
+
+
+# 从日志中提取初始密码
+extract_password_from_logs() {
+    local password=""
+    if command -v systemctl >/dev/null 2>&1; then
+        password=$(journalctl -u openlist --no-pager -n 100 2>/dev/null | grep -i "initial password is:" | tail -1 | sed 's/.*initial password is: //' | tr -d ' ')
+    fi
+    echo "$password"
+}
+
+# 生成随机密码
+generate_random_password() {
+    echo -e "${GREEN_COLOR}正在生成随机密码...${RES}"
+    cd "$INSTALL_PATH"
+    local output=$(./openlist admin random 2>&1)
+    echo -e "\n${GREEN_COLOR}操作结果：${RES}"
+    echo "$output"
+
+    # 提取并显示账号密码
+    local username=$(echo "$output" | grep "username:" | sed 's/.*username://' | tr -d ' ')
+    local password=$(echo "$output" | grep "password:" | sed 's/.*password://' | tr -d ' ')
+
+    if [ -n "$username" ] && [ -n "$password" ]; then
+        echo -e "\n${GREEN_COLOR}账号信息：${RES}"
+        echo -e "账号: $username"
+        echo -e "密码: $password"
+        ADMIN_USER="$username"
+        ADMIN_PASS="$password"
+    fi
+}
+
+# 手动设置密码
+set_manual_password() {
+    read -p "请输入新密码: " new_password
+    if [ -z "$new_password" ]; then
+        echo -e "${RED_COLOR}错误：密码不能为空${RES}"
+        return 1
+    fi
+    echo -e "${GREEN_COLOR}正在设置新密码...${RES}"
+    cd "$INSTALL_PATH"
+    local output=$(./openlist admin set "$new_password" 2>&1)
+    echo -e "\n${GREEN_COLOR}操作结果：${RES}"
+    echo "$output"
+
+    # 提取并显示账号密码
+    local username=$(echo "$output" | grep "username:" | sed 's/.*username://' | tr -d ' ')
+
+    if [ -n "$username" ]; then
+        echo -e "\n${GREEN_COLOR}账号信息：${RES}"
+        echo -e "账号: $username"
+        echo -e "密码: $new_password"
+        ADMIN_USER="$username"
+        ADMIN_PASS="$new_password"
+    fi
+}
+
 RESET_PASSWORD() {
     if [ ! -f "$INSTALL_PATH/openlist" ]; then
         echo -e "\r\n${RED_COLOR}错误：系统未安装 OpenList，请先安装！${RES}\r\n"
@@ -750,50 +951,18 @@ RESET_PASSWORD() {
     echo -e "${GREEN_COLOR}1、生成随机密码${RES}"
     echo -e "${GREEN_COLOR}2、设置新密码${RES}"
     echo -e "${GREEN_COLOR}3、查看当前账号信息${RES}"
-    echo -e "${GREEN_COLOR}4、重置数据库（危险操作）${RES}"
+    echo -e "${GREEN_COLOR}4、从日志中提取初始密码${RES}"
+    echo -e "${GREEN_COLOR}5、重置数据库（危险操作）${RES}"
     echo -e "${GREEN_COLOR}0、返回主菜单${RES}"
     echo
-    read -p "请输入选项 [0-4]: " choice
-
-    # 切换到 OpenList 目录
-    cd "$INSTALL_PATH"
+    read -p "请输入选项 [0-5]: " choice
 
     case "$choice" in
         1)
-            echo -e "${GREEN_COLOR}正在生成随机密码...${RES}"
-            local output=$(./openlist admin random 2>&1)
-            echo -e "\n${GREEN_COLOR}操作结果：${RES}"
-            echo "$output"
-
-            # 提取并显示账号密码
-            local username=$(echo "$output" | grep "username:" | sed 's/.*username://' | tr -d ' ')
-            local password=$(echo "$output" | grep "password:" | sed 's/.*password://' | tr -d ' ')
-
-            if [ -n "$username" ] && [ -n "$password" ]; then
-                echo -e "\n${GREEN_COLOR}账号信息：${RES}"
-                echo -e "账号: $username"
-                echo -e "密码: $password"
-            fi
+            generate_random_password
             ;;
         2)
-            read -p "请输入新密码: " new_password
-            if [ -z "$new_password" ]; then
-                echo -e "${RED_COLOR}错误：密码不能为空${RES}"
-                return 1
-            fi
-            echo -e "${GREEN_COLOR}正在设置新密码...${RES}"
-            local output=$(./openlist admin set "$new_password" 2>&1)
-            echo -e "\n${GREEN_COLOR}操作结果：${RES}"
-            echo "$output"
-
-            # 提取并显示账号密码
-            local username=$(echo "$output" | grep "username:" | sed 's/.*username://' | tr -d ' ')
-
-            if [ -n "$username" ]; then
-                echo -e "\n${GREEN_COLOR}账号信息：${RES}"
-                echo -e "账号: $username"
-                echo -e "密码: $new_password"
-            fi
+            set_manual_password
             ;;
         3)
             echo -e "${GREEN_COLOR}查看当前账号信息...${RES}"
@@ -809,7 +978,7 @@ RESET_PASSWORD() {
             # 尝试从日志中获取密码信息
             if systemctl is-active openlist >/dev/null 2>&1; then
                 echo -e "\n${GREEN_COLOR}从日志中查找密码信息...${RES}"
-                local password_info=$(journalctl -u openlist --no-pager -n 100 | grep -i "password" | tail -3)
+                local password_info=$(journalctl -u openlist --no-pager -n 100 2>/dev/null | grep -i "password" | tail -3)
                 if [ -n "$password_info" ]; then
                     echo "$password_info"
                 else
@@ -818,6 +987,18 @@ RESET_PASSWORD() {
             fi
             ;;
         4)
+            echo -e "${GREEN_COLOR}从日志中提取初始密码...${RES}"
+            local password=$(extract_password_from_logs)
+            if [ -n "$password" ]; then
+                echo -e "${GREEN_COLOR}找到初始密码：${RES}$password"
+                ADMIN_PASS="$password"
+                ADMIN_USER="admin"
+            else
+                echo -e "${YELLOW_COLOR}未在日志中找到初始密码${RES}"
+                echo -e "${YELLOW_COLOR}提示：密码通常在首次启动时生成${RES}"
+            fi
+            ;;
+        5)
             echo -e "${RED_COLOR}警告：此操作将删除所有数据和配置！${RES}"
             echo -e "${YELLOW_COLOR}这将重置 OpenList 到初始状态${RES}"
             read -p "确认重置？请输入 'RESET': " confirm
@@ -837,9 +1018,11 @@ RESET_PASSWORD() {
                 echo -e "${GREEN_COLOR}启动服务...${RES}"
                 systemctl start openlist
 
-                sleep 3
+                echo -e "${GREEN_COLOR}等待服务启动...${RES}"
+                sleep 5
 
                 echo -e "${GREEN_COLOR}生成新的管理员账号...${RES}"
+                cd "$INSTALL_PATH"
                 local output=$(./openlist admin random 2>&1)
                 echo "$output"
 
@@ -863,7 +1046,7 @@ MANAGER_PATH="/usr/local/sbin/openlist-manager"  # 管理脚本存放路径
 COMMAND_LINK="/usr/local/bin/openlist"          # 命令软链接路径
 
 
-# ===================== 关于信息 =====================
+
 SHOW_ABOUT() {
     clear
     echo -e "${GREEN_COLOR}┌────────────────────────────────────────────────────┐${RES}"
@@ -871,8 +1054,8 @@ SHOW_ABOUT() {
     echo -e "${GREEN_COLOR}├────────────────────────────────────────────────────┤${RES}"
     echo -e "${GREEN_COLOR}│                                                    │${RES}"
     echo -e "${GREEN_COLOR}│  ${CYAN_COLOR}版本信息：${RES}                                       │"
-    echo -e "${GREEN_COLOR}│    脚本版本: 1.0.1                                 │${RES}"
-    echo -e "${GREEN_COLOR}│    更新日期: 2025-6-30                             │${RES}"
+    echo -e "${GREEN_COLOR}│    脚本版本: 1.1.0                                 │${RES}"
+    echo -e "${GREEN_COLOR}│    更新日期: 2025-07-02                            │${RES}"
     echo -e "${GREEN_COLOR}│                                                    │${RES}"
     echo -e "${GREEN_COLOR}│                                                    │${RES}"
     echo -e "${GREEN_COLOR}│  ${CYAN_COLOR}OpenList：${RES}                                      │"
@@ -888,6 +1071,7 @@ SHOW_ABOUT() {
     echo -e "${GREEN_COLOR}│  ${CYAN_COLOR}支持平台：${RES}                                      │"
     echo -e "${GREEN_COLOR}│    架构: x86_64, arm64                             │${RES}"
     echo -e "${GREEN_COLOR}│    系统: Linux with systemd                        │${RES}"
+    echo -e "${GREEN_COLOR}│                                                    │${RES}"
     echo -e "${GREEN_COLOR}│                                                    │${RES}"
     echo -e "${GREEN_COLOR}│                                                    │${RES}"
     echo -e "${GREEN_COLOR}└────────────────────────────────────────────────────┘${RES}"
@@ -968,7 +1152,7 @@ SHOW_MENU() {
   # 获取实际安装路径
   INSTALL_PATH=$(GET_INSTALLED_PATH)
 
-  echo -e "\n欢迎使用 OpenList 管理脚本\n"
+  echo -e "\n欢迎使用 OpenList 管理脚本 (支持 Linux)\n"
   echo -e "${GREEN_COLOR}基础功能：${RES}"
   echo -e "${GREEN_COLOR}1、安装 OpenList${RES}"
   echo -e "${GREEN_COLOR}2、更新 OpenList${RES}"
@@ -981,20 +1165,25 @@ SHOW_MENU() {
   echo -e "${GREEN_COLOR}7、停止 OpenList${RES}"
   echo -e "${GREEN_COLOR}8、重启 OpenList${RES}"
   echo -e "${GREEN_COLOR}-------------------${RES}"
+  echo -e "${GREEN_COLOR}配置管理：${RES}"
+  echo -e "${GREEN_COLOR}9、备份配置${RES}"
+  echo -e "${GREEN_COLOR}10、恢复配置${RES}"
+  echo -e "${GREEN_COLOR}-------------------${RES}"
   echo -e "${GREEN_COLOR}高级选项：${RES}"
-  echo -e "${GREEN_COLOR}9、Docker 管理${RES}"
-  echo -e "${GREEN_COLOR}10、定时更新${RES}"
-  echo -e "${GREEN_COLOR}11、系统状态${RES}"
-  echo -e "${GREEN_COLOR}12、关于${RES}"
+  echo -e "${GREEN_COLOR}11、Docker 管理${RES}"
+  echo -e "${GREEN_COLOR}12、定时更新${RES}"
+  echo -e "${GREEN_COLOR}13、系统状态${RES}"
+  echo -e "${GREEN_COLOR}14、关于${RES}"
   echo -e "${GREEN_COLOR}-------------------${RES}"
   echo -e "${GREEN_COLOR}0、退出脚本${RES}"
   echo
-  read -p "请输入选项 [0-12]: " choice
+  read -p "请输入选项 [0-14]: " choice
   
   case "$choice" in
     1)
-      # 安装时重置为默认路径
-      INSTALL_PATH='/opt/openlist'
+      # 安装时重置为默认路径并检查磁盘空间
+      INSTALL_PATH=$(get_install_path)
+      check_disk_space
       CHECK
       INSTALL
       INIT
@@ -1002,6 +1191,7 @@ SHOW_MENU() {
       return 0
       ;;
     2)
+      check_disk_space
       UPDATE
       return 0
       ;;
@@ -1054,6 +1244,14 @@ SHOW_MENU() {
       return 0
       ;;
     9)
+      backup_config
+      return 0
+      ;;
+    10)
+      restore_config
+      return 0
+      ;;
+    11)
       # Docker 管理菜单
       echo -e "\n${GREEN_COLOR}Docker 管理${RES}"
       echo -e "${GREEN_COLOR}1、Docker 安装 OpenList${RES}"
@@ -1070,10 +1268,13 @@ SHOW_MENU() {
 
       case "$docker_choice" in
         1)
+          check_disk_space
           docker_install
           if [ $? -eq 0 ] && [ -n "$ADMIN_USER" ] && [ -n "$ADMIN_PASS" ]; then
             echo -e "\n${GREEN_COLOR}Docker 安装成功！${RES}"
-            echo -e "${GREEN_COLOR}访问地址：http://$(curl -s4 ip.sb || echo "localhost"):${DOCKER_PORT}/${RES}"
+            # 获取公网IP，失败时使用localhost
+            PUBLIC_IP=$(curl -s4 --connect-timeout 5 ip.sb 2>/dev/null || echo "localhost")
+            echo -e "${GREEN_COLOR}访问地址：http://${PUBLIC_IP}:${DOCKER_PORT}/${RES}"
             echo -e "${GREEN_COLOR}默认账号：${ADMIN_USER}${RES}"
             echo -e "${GREEN_COLOR}初始密码：${ADMIN_PASS}${RES}"
           fi
@@ -1131,15 +1332,15 @@ SHOW_MENU() {
       esac
       return 0
       ;;
-    10)
+    12)
       setup_auto_update
       return 0
       ;;
-    11)
+    13)
       check_system_status
       return 0
       ;;
-    12)
+    14)
       SHOW_ABOUT
       return 0
       ;;
@@ -1166,6 +1367,7 @@ if [ $# -eq 0 ]; then
     clear
   done
 elif [ "$1" = "install" ]; then
+  check_disk_space
   CHECK
   INSTALL
   INIT
@@ -1176,6 +1378,7 @@ elif [ "$1" = "update" ]; then
     echo -e "正确用法: $0 update"
     exit 1
   fi
+  check_disk_space
   UPDATE
 elif [ "$1" = "uninstall" ]; then
   if [ $# -gt 1 ]; then
