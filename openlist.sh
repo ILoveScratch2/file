@@ -3,8 +3,8 @@
 #
 # OpenList Manage Script
 #
-# Version: 1.1.1
-# Last Updated: 2025-07-02
+# Version: 1.3.0
+# Last Updated: 2025-07-04
 #
 # Description:
 #   A management script for OpenList (https://github.com/OpenListTeam/OpenList)
@@ -1074,8 +1074,8 @@ SHOW_ABOUT() {
     echo -e "${GREEN_COLOR}├────────────────────────────────────────────────────┤${RES}"
     echo -e "${GREEN_COLOR}│                                                    │${RES}"
     echo -e "${GREEN_COLOR}│  ${CYAN_COLOR}版本信息：${RES}                                       │"
-    echo -e "${GREEN_COLOR}│    脚本版本: 1.1.0                                 │${RES}"
-    echo -e "${GREEN_COLOR}│    更新日期: 2025-07-02                            │${RES}"
+    echo -e "${GREEN_COLOR}│    脚本版本: 1.3.0                                 │${RES}"
+    echo -e "${GREEN_COLOR}│    更新日期: 2025-07-04                            │${RES}"
     echo -e "${GREEN_COLOR}│                                                    │${RES}"
     echo -e "${GREEN_COLOR}│                                                    │${RES}"
     echo -e "${GREEN_COLOR}│  ${CYAN_COLOR}OpenList：${RES}                                      │"
