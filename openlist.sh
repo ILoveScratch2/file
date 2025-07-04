@@ -23,28 +23,26 @@
 #
 ###############################################################################
 
-# 在脚本开头添加错误处理函数
-handle_error() {
-    local exit_code=$1
-    local error_msg=$2
-    echo -e "${RED_COLOR}错误：${error_msg}${RES}"
-    exit ${exit_code}
-}
+# 颜色定义
+RED_COLOR='\e[1;31m'
+GREEN_COLOR='\e[1;32m'
+YELLOW_COLOR='\e[1;33m'
+BLUE_COLOR='\e[1;34m'
+CYAN_COLOR='\e[1;36m'
+PURPLE_COLOR='\e[1;35m'
+RES='\e[0m'
 
-
-
-# 检测操作系统类型
-detect_os() {
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        # Linux
-        OS_TYPE="linux"
-        OS_NAME="linux"
-    else
-        # 不支持的系统
-        OS_TYPE="unknown"
-        OS_NAME="unknown"
-    fi
-}
+# 使用 sudo -v 确保当前script使用root执行
+if [ "$(id -u)" != "0" ]; then
+    echo -e "${RED_COLOR}此脚本需要root权限运行${RES}"
+    echo -e "${YELLOW_COLOR}正在请求root权限...${RES}"
+    sudo -v || {
+        echo -e "${RED_COLOR}获取root权限失败，退出脚本${RES}"
+        exit 1
+    }
+    # 使用sudo重新执行脚本
+    exec sudo "$0" "$@"
+fi
 
 # 获取安装路径
 get_install_path() {
@@ -82,16 +80,13 @@ check_disk_space() {
     fi
 }
 
-# 在关键操作处使用错误处理
+# 检查必要的命令
 if ! command -v curl >/dev/null 2>&1; then
-    handle_error 1 "未找到 curl 命令，请先安装"
+    echo -e "${RED_COLOR}错误：未找到 curl 命令，请先安装${RES}"
+    exit 1
 fi
 
-# 初始化系统检测
-detect_os
-
 # 配置部分
-#######################
 # GitHub 相关配置
 GITHUB_REPO="OpenListTeam/OpenList"
 VERSION_TAG="beta"
@@ -106,15 +101,6 @@ DOCKER_PORT="5244"
 # 定时更新配置
 CRON_UPDATE_ENABLED=false
 CRON_UPDATE_TIME="0 2 * * 0"  # 每周日凌晨2点
-
-
-RED_COLOR='\e[1;31m'
-GREEN_COLOR='\e[1;32m'
-YELLOW_COLOR='\e[1;33m'
-BLUE_COLOR='\e[1;34m'
-CYAN_COLOR='\e[1;36m'
-PURPLE_COLOR='\e[1;35m'
-RES='\e[0m'
 
 # 已安装的 OpenList
 GET_INSTALLED_PATH() {
@@ -178,21 +164,12 @@ elif [ "$platform" = "aarch64" ]; then
   ARCH=arm64
 fi
 
-# 权限和环境检查
-if [ "$(id -u)" != "0" ]; then
-  if [ "$1" = "install" ] || [ "$1" = "update" ] || [ "$1" = "uninstall" ]; then
-    echo -e "\r\n${RED_COLOR}错误：请使用 root 权限运行此命令！${RES}\r\n"
-    echo -e "提示：使用 ${GREEN_COLOR}sudo $0 $1${RES} 重试\r\n"
-    exit 1
-  fi
-elif [ "$ARCH" == "UNKNOWN" ]; then
+# 环境检查
+if [ "$ARCH" == "UNKNOWN" ]; then
   echo -e "\r\n${RED_COLOR}出错了${RES}，一键安装目前仅支持 x86_64 和 arm64 平台。\r\n"
   exit 1
-elif [ "$OS_TYPE" = "linux" ] && ! command -v systemctl >/dev/null 2>&1; then
+elif ! command -v systemctl >/dev/null 2>&1; then
   echo -e "\r\n${RED_COLOR}出错了${RES}，无法确定你当前的 Linux 发行版。\r\n建议手动安装。\r\n"
-  exit 1
-elif [ "$OS_TYPE" != "linux" ]; then
-  echo -e "\r\n${RED_COLOR}出错了${RES}，此脚本仅支持 Linux 系统。\r\n"
   exit 1
 fi
 
@@ -241,7 +218,9 @@ backup_config() {
         return 1
     fi
 
-    local backup_dir="./openlist_backup_$(date +%Y%m%d_%H%M%S)"
+    # 使用固定的备份目录
+    local backup_base_dir="./openlist_backups"
+    local backup_dir="$backup_base_dir/backup_$(date +%Y%m%d_%H%M%S)"
     mkdir -p "$backup_dir"
 
     echo -e "${BLUE_COLOR}备份配置到：$backup_dir${RES}"
@@ -262,15 +241,56 @@ backup_config() {
 restore_config() {
     echo -e "${CYAN_COLOR}配置恢复${RES}"
 
-    read -p "请输入备份目录路径: " backup_path
+    # 检查固定备份目录
+    local backup_base_dir="./openlist_backups"
+    if [ ! -d "$backup_base_dir" ]; then
+        echo -e "${RED_COLOR}错误：未找到备份目录 $backup_base_dir${RES}"
+        read -p "按回车键继续..."
+        return 1
+    fi
+
+    # 列出可用的备份
+    echo -e "${GREEN_COLOR}可用的备份：${RES}"
+    local backup_count=0
+    local backup_list=()
+
+    for backup_dir in "$backup_base_dir"/backup_*; do
+        if [ -d "$backup_dir/data" ]; then
+            backup_count=$((backup_count + 1))
+            backup_list+=("$backup_dir")
+            echo -e "${GREEN_COLOR}$backup_count${RES} - $(basename "$backup_dir")"
+        fi
+    done
+
+    if [ $backup_count -eq 0 ]; then
+        echo -e "${RED_COLOR}未找到任何备份${RES}"
+        read -p "按回车键继续..."
+        return 1
+    fi
+
+    echo -e "${GREEN_COLOR}x${RES} - 自定义输入备份路径"
+    echo
+    read -p "请选择备份 [1-$backup_count/x]: " choice
+
+    local backup_path=""
+    if [ "$choice" = "x" ] || [ "$choice" = "X" ]; then
+        read -p "请输入备份目录路径: " backup_path
+    elif [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le $backup_count ]; then
+        backup_path="${backup_list[$((choice-1))]}"
+    else
+        echo -e "${RED_COLOR}无效的选择${RES}"
+        read -p "按回车键继续..."
+        return 1
+    fi
 
     if [ ! -d "$backup_path/data" ]; then
-        echo -e "${RED_COLOR}错误：备份目录不存在${RES}"
+        echo -e "${RED_COLOR}错误：备份目录不存在或无效${RES}"
         read -p "按回车键继续..."
         return 1
     fi
 
     echo -e "${YELLOW_COLOR}警告：此操作将覆盖当前配置${RES}"
+    echo -e "备份路径: $backup_path"
     read -p "确认恢复？[y/N]: " confirm
 
     case "$confirm" in
