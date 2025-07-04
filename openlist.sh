@@ -960,6 +960,7 @@ UNINSTALL() {
             fi
             
             echo -e "${GREEN_COLOR}OpenList 已完全卸载${RES}"
+            exit 0
             ;;
         *)
             echo -e "${GREEN_COLOR}已取消卸载${RES}"
