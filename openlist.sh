@@ -1133,6 +1133,7 @@ COMMAND_LINK="/usr/local/bin/openlist"          # 命令软链接路径
 
 
 SHOW_ABOUT() {
+    clear
     echo -e "${GREEN_COLOR}┌────────────────────────────────────────────────────┐${RES}"
     echo -e "${GREEN_COLOR}│               OpenList Manage Script               │${RES}"
     echo -e "${GREEN_COLOR}├────────────────────────────────────────────────────┤${RES}"
