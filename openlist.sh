@@ -758,7 +758,7 @@ SUCCESS() {
   PUBLIC_IP=$(curl -s4 --connect-timeout 5 ip.sb 2>/dev/null || curl -s4 --connect-timeout 5 ifconfig.me 2>/dev/null)
 
   # 获取版本信息
-  local version_info="未知"
+  local version_info="UNKNOWN"
   if [ -f "$VERSION_FILE" ]; then
     version_info=$(head -n1 "$VERSION_FILE" 2>/dev/null)
   elif [ ! -z "$REAL_VERSION" ]; then
@@ -903,6 +903,9 @@ UPDATE() {
 
     echo -e "${GREEN_COLOR}当前版本：${RES}$version_info"
     echo -e "${GREEN_COLOR}更新时间：${RES}$(date '+%Y-%m-%d %H:%M:%S')"
+    echo
+    read -p "按下 Enter 返回主菜单..." -n 1
+    echo
 }
 
 UNINSTALL() {
