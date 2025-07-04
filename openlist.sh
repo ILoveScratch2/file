@@ -41,7 +41,7 @@ if [ "$(id -u)" != "0" ]; then
         exit 1
     }
     # 使用sudo重新执行脚本
-    exec sudo "$0" "$@"
+    exec sudo "bash" "$0" "$@"
 fi
 
 # 获取安装路径
