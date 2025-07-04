@@ -1172,7 +1172,7 @@ SHOW_MENU() {
   # 获取实际安装路径
   INSTALL_PATH=$(GET_INSTALLED_PATH)
 
-  echo -e "\n欢迎使用 OpenList 管理脚本 (支持 Linux)\n"
+  echo -e "\n欢迎使用 OpenList 管理脚本\n"
   echo -e "${GREEN_COLOR}基础功能：${RES}"
   echo -e "${GREEN_COLOR}1、安装 OpenList${RES}"
   echo -e "${GREEN_COLOR}2、更新 OpenList${RES}"
