@@ -747,7 +747,7 @@ SUCCESS() {
   clear  # 只在开始时清屏一次
   print_line() {
     local text="$1"
-    local width=51
+    local width=50
     printf "│ %-${width}s │\n" "$text"
   }
 
@@ -1133,7 +1133,6 @@ COMMAND_LINK="/usr/local/bin/openlist"          # 命令软链接路径
 
 
 SHOW_ABOUT() {
-    clear
     echo -e "${GREEN_COLOR}┌────────────────────────────────────────────────────┐${RES}"
     echo -e "${GREEN_COLOR}│               OpenList Manage Script               │${RES}"
     echo -e "${GREEN_COLOR}├────────────────────────────────────────────────────┤${RES}"
