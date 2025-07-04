@@ -57,15 +57,20 @@ check_disk_space() {
     local tmp_space=$(df -h /tmp 2>/dev/null | awk 'NR==2 {print $4}' || echo "unknown")
     local tmp_space_mb=$(df /tmp 2>/dev/null | awk 'NR==2 {print $4}' || echo "0")
 
-    # 检查当前目录空间
-    local current_space=$(df -h . 2>/dev/null | awk 'NR==2 {print $4}' || echo "unknown")
-    local current_space_mb=$(df . 2>/dev/null | awk 'NR==2 {print $4}' || echo "0")
+    # 检查安装目录所在分区空间
+    local install_dir_parent=$(dirname "$INSTALL_PATH")
+    # 确保父目录存在以便检查空间
+    if [ ! -d "$install_dir_parent" ]; then
+        mkdir -p "$install_dir_parent" 2>/dev/null || install_dir_parent="/"
+    fi
+    local install_space=$(df -h "$install_dir_parent" 2>/dev/null | awk 'NR==2 {print $4}' || echo "unknown")
+    local install_space_mb=$(df "$install_dir_parent" 2>/dev/null | awk 'NR==2 {print $4}' || echo "0")
 
-    if [ "$tmp_space_mb" != "0" ] && [ "$current_space_mb" != "0" ]; then
-        if [ $tmp_space_mb -lt 102400 ] || [ $current_space_mb -lt 102400 ]; then
+    if [ "$tmp_space_mb" != "0" ] && [ "$install_space_mb" != "0" ]; then
+        if [ $tmp_space_mb -lt 102400 ] || [ $install_space_mb -lt 102400 ]; then
             echo -e "${RED_COLOR}警告：系统空间不足${RES}"
             echo -e "临时目录可用空间: $tmp_space"
-            echo -e "当前目录可用空间: $current_space"
+            echo -e "安装目录可用空间: $install_space"
             echo -e "${YELLOW_COLOR}建议清理系统空间后再继续${RES}"
             read -p "是否继续？[y/N]: " continue_choice
             case "$continue_choice" in
@@ -112,8 +117,16 @@ GET_INSTALLED_PATH() {
             return 0
         fi
     fi
-    
-    # 如果未找到或路径无效，返回默认路径
+
+    # 如果服务文件中的路径无效，尝试常见位置
+    for path in "/opt/openlist" "/usr/local/openlist" "/home/openlist"; do
+        if [ -f "$path/openlist" ]; then
+            echo "$path"
+            return 0
+        fi
+    done
+
+    # 如果都找不到，返回默认路径
     echo "/opt/openlist"
 }
 
@@ -214,12 +227,12 @@ backup_config() {
 
     if [ ! -d "$INSTALL_PATH/data" ]; then
         echo -e "${RED_COLOR}错误：未找到配置目录${RES}"
-        read -p "按回车键继续..."
+        read -p "按 Enter 继续..."
         return 1
     fi
 
-    # 使用固定的备份目录
-    local backup_base_dir="./openlist_backups"
+    # 使用固定的备份目录（绝对路径）
+    local backup_base_dir="/opt/openlist_backups"
     local backup_dir="$backup_base_dir/backup_$(date +%Y%m%d_%H%M%S)"
     mkdir -p "$backup_dir"
 
@@ -233,7 +246,7 @@ backup_config() {
         return 1
     fi
 
-    read -p "按回车键继续..."
+    read -p "按Enter键继续..."
     return 0
 }
 
@@ -241,11 +254,11 @@ backup_config() {
 restore_config() {
     echo -e "${CYAN_COLOR}配置恢复${RES}"
 
-    # 检查固定备份目录
-    local backup_base_dir="./openlist_backups"
+    # 检查固定备份目录（绝对路径）
+    local backup_base_dir="/opt/openlist_backups"
     if [ ! -d "$backup_base_dir" ]; then
         echo -e "${RED_COLOR}错误：未找到备份目录 $backup_base_dir${RES}"
-        read -p "按回车键继续..."
+        read -p "按Enter键继续..."
         return 1
     fi
 
@@ -264,7 +277,7 @@ restore_config() {
 
     if [ $backup_count -eq 0 ]; then
         echo -e "${RED_COLOR}未找到任何备份${RES}"
-        read -p "按回车键继续..."
+        read -p "按Enter继续..."
         return 1
     fi
 
@@ -279,13 +292,13 @@ restore_config() {
         backup_path="${backup_list[$((choice-1))]}"
     else
         echo -e "${RED_COLOR}无效的选择${RES}"
-        read -p "按回车键继续..."
+        read -p "按Enter键继续..."
         return 1
     fi
 
     if [ ! -d "$backup_path/data" ]; then
         echo -e "${RED_COLOR}错误：备份目录不存在或无效${RES}"
-        read -p "按回车键继续..."
+        read -p "按Enter键继续..."
         return 1
     fi
 
@@ -312,7 +325,7 @@ restore_config() {
             ;;
     esac
 
-    read -p "按回车键继续..."
+    read -p "按 Enter 键继续..."
 }
 
 
@@ -602,6 +615,10 @@ check_system_status() {
             echo -e "  Docker 服务：未运行"
         fi
     fi
+
+    echo
+    read -p "按下 Enter 返回主菜单..." -n 1
+    echo
 }
 
 # Download
@@ -640,7 +657,7 @@ INSTALL() {
     echo -e "${GREEN_COLOR}是否使用 GitHub 代理？（默认无代理）${RES}"
     echo -e "${GREEN_COLOR}代理地址必须为 https 开头，斜杠 / 结尾 ${RES}"
     echo -e "${GREEN_COLOR}例如：https://ghproxy.net/ ${RES}"
-    read -p "请输入代理地址或直接按回车继续: " proxy_input
+    read -p "请输入代理地址或直接按 Enter 继续: " proxy_input
 
   # 如果用户输入了代理地址，则使用代理拼接下载链接
   if [ -n "$proxy_input" ]; then
@@ -688,8 +705,10 @@ INSTALL() {
     exit 1
   fi
 
-  # 记录版本信息
-  echo "$VERSION_TAG" > "$VERSION_FILE"
+  # 获取并记录真实版本信息
+  echo -e "${GREEN_COLOR}获取版本信息...${RES}"
+  REAL_VERSION=$(curl -s "https://api.github.com/repos/OpenListTeam/OpenList/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null || echo "$VERSION_TAG")
+  echo "$REAL_VERSION" > "$VERSION_FILE"
   echo "$(date '+%Y-%m-%d %H:%M:%S')" >> "$VERSION_FILE"
 
   # 清理临时文件
@@ -779,7 +798,7 @@ UPDATE() {
     echo -e "${GREEN_COLOR}是否使用 GitHub 代理？（默认无代理）${RES}"
     echo -e "${GREEN_COLOR}代理地址必须为 https 开头，斜杠 / 结尾 ${RES}"
     echo -e "${GREEN_COLOR}例如：https://ghproxy.com/ ${RES}"
-    read -p "请输入代理地址或直接按回车继续: " proxy_input
+    read -p "请输入代理地址或直接按 Enter 继续: " proxy_input
 
     # 如果用户输入了代理地址，则使用代理拼接下载链接
     if [ -n "$proxy_input" ]; then
@@ -848,8 +867,10 @@ UPDATE() {
         exit 1
     fi
 
-    # 更新版本信息
-    echo "$VERSION_TAG" > "$VERSION_FILE"
+    # 获取并更新真实版本信息
+    echo -e "${GREEN_COLOR}获取版本信息...${RES}"
+    REAL_VERSION=$(curl -s "https://api.github.com/repos/OpenListTeam/OpenList/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null || echo "$VERSION_TAG")
+    echo "$REAL_VERSION" > "$VERSION_FILE"
     echo "$(date '+%Y-%m-%d %H:%M:%S')" >> "$VERSION_FILE"
 
     # 清理临时文件
@@ -863,10 +884,44 @@ UPDATE() {
 }
 
 UNINSTALL() {
-    if [ ! -f "$INSTALL_PATH/openlist" ]; then
-        echo -e "\r\n${RED_COLOR}错误：未在 $INSTALL_PATH 找到 OpenList${RES}\r\n"
-        exit 1
+    # 尝试从多个位置找到 OpenList 安装路径
+    local found_path=""
+
+    # 1. 首先尝试从服务文件获取路径
+    if [ -f "/etc/systemd/system/openlist.service" ]; then
+        found_path=$(grep "WorkingDirectory=" /etc/systemd/system/openlist.service | cut -d'=' -f2)
+        if [ -f "$found_path/openlist" ]; then
+            INSTALL_PATH="$found_path"
+        else
+            found_path=""
+        fi
     fi
+
+    # 2. 如果服务文件中的路径无效，尝试常见位置
+    if [ -z "$found_path" ]; then
+        for path in "/opt/openlist" "$INSTALL_PATH"; do
+            if [ -f "$path/openlist" ]; then
+                INSTALL_PATH="$path"
+                found_path="$path"
+                break
+            fi
+        done
+    fi
+
+    # 3. 如果还是找不到，让用户手动指定
+    if [ -z "$found_path" ]; then
+        echo -e "${YELLOW_COLOR}未找到 OpenList 安装路径${RES}"
+        echo -e "${YELLOW_COLOR}请手动指定 OpenList 安装目录：${RES}"
+        read -p "安装路径: " manual_path
+        if [ -f "$manual_path/openlist" ]; then
+            INSTALL_PATH="$manual_path"
+        else
+            echo -e "\r\n${RED_COLOR}错误：在指定路径 $manual_path 中未找到 OpenList${RES}\r\n"
+            exit 1
+        fi
+    fi
+
+    echo -e "${GREEN_COLOR}找到 OpenList 安装路径：$INSTALL_PATH${RES}"
     
     echo -e "${RED_COLOR}警告：卸载后将删除本地 OpenList 目录、数据库文件及命令行工具！${RES}"
     read -p "是否确认卸载？[y/N]: " choice
@@ -878,6 +933,15 @@ UNINSTALL() {
             echo -e "${GREEN_COLOR}停止 OpenList 进程${RES}"
             systemctl stop openlist
             systemctl disable openlist
+
+            echo -e "${GREEN_COLOR}禁用自动更新${RES}"
+            # 从 crontab 中删除自动更新任务（如果存在）
+            if crontab -l 2>/dev/null | grep -q "openlist.*update"; then
+                crontab -l 2>/dev/null | grep -v "openlist.*update" | crontab -
+                echo -e "${GREEN_COLOR}已禁用定时更新${RES}"
+            else
+                echo -e "${YELLOW_COLOR}未发现定时更新任务${RES}"
+            fi
 
             echo -e "${GREEN_COLOR}删除 OpenList 文件${RES}"
             rm -rf "$INSTALL_PATH"
