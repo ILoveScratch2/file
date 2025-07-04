@@ -3,7 +3,7 @@
 #
 # OpenList Manage Script
 #
-# Version: 1.3.0
+# Version: 1.3.1
 # Last Updated: 2025-07-04
 #
 # Description:
@@ -416,7 +416,7 @@ docker_install() {
 
         # 等待容器启动
         echo -e "${GREEN_COLOR}等待Container启动...${RES}"
-        sleep 10
+        sleep 3
 
         # 获取密码
         echo -e "${GREEN_COLOR}获取初始密码...${RES}"
@@ -610,7 +610,7 @@ download_file() {
     local output="$2"
     local max_retries=3
     local retry_count=0
-    local wait_time=5
+    local wait_time=2
 
     while [ $retry_count -lt $max_retries ]; do
         if curl -L --connect-timeout 10 --retry 3 --retry-delay 3 "$url" -o "$output"; then
@@ -623,7 +623,7 @@ download_file() {
         if [ $retry_count -lt $max_retries ]; then
             echo -e "${YELLOW_COLOR}下载失败，${wait_time} 秒后进行第 $((retry_count + 1)) 次重试...${RES}"
             sleep $wait_time
-            wait_time=$((wait_time + 5))  # 每次重试增加等待时间
+            wait_time=$((wait_time + 2))  # 每次重试增加等待时间
         else
             echo -e "${RED_COLOR}下载失败，已重试 $max_retries 次${RES}"
             return 1
@@ -1039,7 +1039,7 @@ RESET_PASSWORD() {
                 systemctl start openlist
 
                 echo -e "${GREEN_COLOR}等待服务启动...${RES}"
-                sleep 5
+                sleep 2
 
                 echo -e "${GREEN_COLOR}生成新的管理员账号...${RES}"
                 cd "$INSTALL_PATH"
@@ -1074,7 +1074,7 @@ SHOW_ABOUT() {
     echo -e "${GREEN_COLOR}├────────────────────────────────────────────────────┤${RES}"
     echo -e "${GREEN_COLOR}│                                                    │${RES}"
     echo -e "${GREEN_COLOR}│  ${CYAN_COLOR}版本信息：${RES}                                       │"
-    echo -e "${GREEN_COLOR}│    脚本版本: 1.3.0                                 │${RES}"
+    echo -e "${GREEN_COLOR}│    脚本版本: 1.3.1                                 │${RES}"
     echo -e "${GREEN_COLOR}│    更新日期: 2025-07-04                            │${RES}"
     echo -e "${GREEN_COLOR}│                                                    │${RES}"
     echo -e "${GREEN_COLOR}│                                                    │${RES}"
@@ -1098,7 +1098,7 @@ SHOW_ABOUT() {
     echo
     echo -e "${YELLOW_COLOR}感谢使用 OpenList 管理脚本！${RES}"
     echo
-    read -p "PAUSED" -n 1
+    read -p "按下 Enter 返回主菜单..." -n 1
     echo
 }
 
@@ -1172,7 +1172,7 @@ SHOW_MENU() {
   # 获取实际安装路径
   INSTALL_PATH=$(GET_INSTALLED_PATH)
 
-  echo -e "\n欢迎使用 OpenList 管理脚本\n"
+  echo -e "\n欢迎使用 OpenList 管理脚本 (支持 Linux)\n"
   echo -e "${GREEN_COLOR}基础功能：${RES}"
   echo -e "${GREEN_COLOR}1、安装 OpenList${RES}"
   echo -e "${GREEN_COLOR}2、更新 OpenList${RES}"
@@ -1380,9 +1380,9 @@ if [ $# -eq 0 ]; then
     SHOW_MENU
     echo
     if [ $? -eq 0 ]; then
-      sleep 3  # 成功
+      sleep 1  # 成功
     else
-      sleep 5  # FAIL
+      sleep 2  # FAIL
     fi
     clear
   done
