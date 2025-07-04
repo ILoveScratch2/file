@@ -757,8 +757,18 @@ SUCCESS() {
 
   PUBLIC_IP=$(curl -s4 --connect-timeout 5 ip.sb 2>/dev/null || curl -s4 --connect-timeout 5 ifconfig.me 2>/dev/null)
 
+  # 获取版本信息
+  local version_info="未知"
+  if [ -f "$VERSION_FILE" ]; then
+    version_info=$(head -n1 "$VERSION_FILE" 2>/dev/null)
+  elif [ ! -z "$REAL_VERSION" ]; then
+    version_info="$REAL_VERSION"
+  fi
+
   echo -e "┌────────────────────────────────────────────────────┐"
   print_line "OpenList 安装成功！"
+  print_line ""
+  print_line "版本信息：$version_info"
   print_line ""
   print_line "访问地址："
   print_line "  局域网：http://${LOCAL_IP}:5244/"
@@ -880,7 +890,19 @@ UPDATE() {
     echo -e "${GREEN_COLOR}启动 OpenList 进程${RES}\r\n"
     systemctl restart openlist
 
+    # 显示更新完成信息和版本号
     echo -e "${GREEN_COLOR}更新完成！${RES}"
+
+    # 获取并显示版本信息
+    local version_info="未知"
+    if [ -f "$VERSION_FILE" ]; then
+        version_info=$(head -n1 "$VERSION_FILE" 2>/dev/null)
+    elif [ ! -z "$REAL_VERSION" ]; then
+        version_info="$REAL_VERSION"
+    fi
+
+    echo -e "${GREEN_COLOR}当前版本：${RES}$version_info"
+    echo -e "${GREEN_COLOR}更新时间：${RES}$(date '+%Y-%m-%d %H:%M:%S')"
 }
 
 UNINSTALL() {
